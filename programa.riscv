@@ -1,0 +1,97 @@
+.globl main
+
+.data
+    dados:   .word 2, 5, 8, 9, 10, 11, 12, 13, 14, 16, 23, 38, 56, 72, 91 # array que será utilizado para busca, obrigatorio estar ordenado de forma crescente
+    alvo:    .word 38 # valor a ser buscado no array
+    tamanho: .word 15 # tamanho do array
+
+.text
+
+main:
+    # --- Alocação dinâmica no heap ---
+    la t0, tamanho
+    lw s1, 0(t0)        
+    slli a1, s1, 2 # multplica tamanho por 4 por conta do tamanho do byte para iterar no array
+    li a0, 9              
+    ecall                   
+    mv s0, a0             
+
+    # --- Copia do array estatico para o heap ---
+    la t0, dados          
+    li t1, 0  
+    
+copy:
+    beq t1, s1, run # caso de parada, quando t1 alcançar o tamanho do array (s1)        
+    lw t2, 0(t0)          
+    sw t2, 0(a0)          
+    addi t0, t0, 4          
+    addi a0, a0, 4          
+    addi t1, t1, 1          
+    j copy
+
+run:
+    # --- Chamada da busca binária ---
+    mv a0, s0             
+    li a1, 0              
+    addi a2, s1, -1         
+    
+    la t0, alvo
+    lw a3, 0(t0)          
+    
+    jal ra, b_search       
+
+    # --- Imprime o resultado (índice retornado) ou -1 para erro ---
+    mv a1, a0             
+    li a0, 1 # codigo syscall para impressão de um inteiro              
+    ecall 
+
+    # --- Finalização do programa ---
+    li a0, 10 # codigo syscall para encerramento do programa
+    ecall
+
+# --- Função de busca binária ---
+b_search:
+    # convenção do risc V, ajustando ponteiro da memória
+    addi sp, sp, -12
+    sw ra, 8(sp) # salva ra         
+    sw s0, 4(sp) # salva low          
+    sw s1, 0(sp) # salva high          
+    
+    mv s0, a1             
+    mv s1, a2             
+
+loop:
+    bgt s0, s1, exit_err # caso de parada, low > high   
+    
+    add t0, s0, s1         
+    srai t0, t0, 1 # divisao por 2         
+    
+    slli t1, t0, 2 # multiplica pivot por 4 para acesso na memória          
+    add t1, t1, a0         
+    lw t2, 0(t1)          
+
+    beq t2, a3, exit_ok # se acha valor alvo, retorna sucesso    
+    blt t2, a3, up # se valor encontrado for menor do que o alvo, vai para metade superior
+    
+    addi s1, t0, -1 # atualiza limite superior       
+    j loop
+    
+up:
+    addi s0, t0, 1 # atualiza limite inferior        
+    j loop
+
+exit_ok:
+    mv a0, t0 # retorna indice do valor encontrado             
+    j pop
+    
+exit_err:
+    # chama pelo loop da busca para indicar erro, caso não achar o alvo
+    li a0, -1
+    
+pop:
+    # ajusta pilha e registradores
+    lw s1, 0(sp)
+    lw s0, 4(sp)
+    lw ra, 8(sp)
+    addi sp, sp, 12
+    jr ra
